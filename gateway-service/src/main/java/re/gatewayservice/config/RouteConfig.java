@@ -18,19 +18,19 @@ public class RouteConfig {
                 .route("pronunciation-service", r -> r.path("/api/pronunciation/**")
                         .filters(f -> f.stripPrefix(1)
                                 .deduplicateResponseHeader("Access-Control-Allow-Origin Access-Control-Allow-Credentials", "RETAIN_UNIQUE"))
-                        .uri("http://localhost:8082"))
+                        .uri("lb://pronunciation-service"))
                 .route("speech-service", r -> r.path("/api/speech/**")
                         .filters(f -> f.stripPrefix(1)
                                 .deduplicateResponseHeader("Access-Control-Allow-Origin Access-Control-Allow-Credentials", "RETAIN_UNIQUE"))
-                        .uri("http://localhost:8081"))
+                        .uri("lb://speech-service"))
                 .route("ai-analysis-service", r -> r.path("/api/ai-analysis/**")
                         .filters(f -> f.stripPrefix(1)
                                 .deduplicateResponseHeader("Access-Control-Allow-Origin Access-Control-Allow-Credentials", "RETAIN_UNIQUE"))
-                        .uri("http://localhost:8083"))
+                        .uri("lb://ai-analysis-service"))
                 .route("result-service", r -> r.path("/api/result/**")
                         .filters(f -> f.stripPrefix(1)
                                 .deduplicateResponseHeader("Access-Control-Allow-Origin Access-Control-Allow-Credentials", "RETAIN_UNIQUE"))
-                        .uri("http://localhost:8084"))
+                        .uri("lb://result-service"))
                 .build();
     }
 }
