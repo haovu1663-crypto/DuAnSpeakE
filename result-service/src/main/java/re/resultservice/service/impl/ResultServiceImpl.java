@@ -14,9 +14,11 @@ import re.resultservice.dto.clients.*;
 import re.resultservice.entity.AnalysisResult;
 import re.resultservice.repository.AnalysisResultRepository;
 import re.resultservice.service.ResultService;
+import re.resultservice.util.ByteArrayMultipartFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 
 @Slf4j
 @Service
@@ -32,23 +34,31 @@ public class ResultServiceImpl implements ResultService {
 
     @Override
     public ProcessResultResponse processAudio(MultipartFile audioFile) {
-        log.info("Starting audio processing orchestration...");
+        log.info("Starting audio processing orchestration for file: {}", audioFile.getOriginalFilename());
 
-        // 1. Lưu file tạm để truyền cho Pronunciation Service (vì nó cần đường dẫn file)
+        // 1. Đọc toàn bộ bytes của MultipartFile MỘT LẦN để tránh bị "consume stream" khi
+        //    vừa gọi transferTo() vừa gửi lại cho Speech Service. Sau đó tái sử dụng cho cả 2 mục đích.
         File tempFile = null;
         try {
-            tempFile = File.createTempFile("audio_", ".wav");
-            audioFile.transferTo(tempFile);
-            log.info("Temp audio file created at: {}", tempFile.getAbsolutePath());
+            byte[] audioBytes = audioFile.getBytes();
+            String originalName = audioFile.getOriginalFilename() != null
+                    ? audioFile.getOriginalFilename() : "audio.wav";
 
-            // 2. Gọi Speech Service để lấy Transcript
+            // 2. Gọi Speech Service để lấy Transcript (gửi bằng Feign qua MultipartFile tái tạo)
             log.info("Calling Speech Service...");
-            TranscribeResponse speechResp = speechClient.transcribe(audioFile);
+            MultipartFile speechUpload = new ByteArrayMultipartFile(
+                    "file", originalName, audioFile.getContentType(), audioBytes);
+            TranscribeResponse speechResp = speechClient.transcribe(speechUpload);
             String transcript = speechResp.getTranscript();
             String audioId = speechResp.getAudioId();
             log.info("Received from Speech Service: audioId={}, transcript='{}'", audioId, transcript);
 
-            // 3. Gọi Pronunciation Service để chấm điểm phát âm
+            // 3. Lưu file tạm để truyền đường dẫn cho Pronunciation Service
+            tempFile = File.createTempFile("audio_", ".wav");
+            Files.write(tempFile.toPath(), audioBytes);
+            log.info("Temp audio file created at: {}", tempFile.getAbsolutePath());
+
+            // 4. Gọi Pronunciation Service để chấm điểm phát âm
             log.info("Calling Pronunciation Service...");
             EvaluateRequest evalReq = EvaluateRequest.builder()
                     .audioId(audioId)
@@ -58,7 +68,7 @@ public class ResultServiceImpl implements ResultService {
             EvaluateResponse evalResp = pronunciationClient.evaluate(evalReq);
             log.info("Received from Pronunciation Service: pronunciation score={}", evalResp.getPronunciation());
 
-            // 4. Gọi AI Analysis Service để sửa lỗi ngữ pháp & feedback
+            // 5. Gọi AI Analysis Service để sửa lỗi ngữ pháp & feedback
             log.info("Calling AI Analysis Service...");
             FeedbackRequest feedbackReq = FeedbackRequest.builder()
                     .transcript(transcript)
@@ -68,16 +78,16 @@ public class ResultServiceImpl implements ResultService {
             FeedbackResponse feedbackResp = aiAnalysisClient.analyzeFeedback(feedbackReq);
             log.info("Received from AI Analysis Service: vocabulary level={}", feedbackResp.getVocabularyLevel());
 
-            // 5. Gộp dữ liệu và lưu vào cơ sở dữ liệu
+            // 6. Gộp dữ liệu và lưu vào cơ sở dữ liệu
             log.info("Saving aggregated result to DB...");
             AnalysisResult entity = saveToDb(audioId, transcript, evalResp, feedbackResp);
 
-            // 6. Trả kết quả cuối cùng cho Frontend
+            // 7. Trả kết quả cuối cùng cho Frontend
             log.info("Process completed successfully for audioId={}", audioId);
             return mapToResponse(entity, evalResp);
 
         } catch (IOException e) {
-            log.error("Error creating/writing temp file", e);
+            log.error("Error reading audio file or writing temp file", e);
             throw new RuntimeException("Lỗi xử lý file ghi âm: " + e.getMessage(), e);
         } finally {
             // Xóa file tạm

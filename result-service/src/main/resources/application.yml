@@ -1,6 +1,10 @@
 spring:
   application:
     name: result-service
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
 
 server:
   port: 8084
@@ -14,3 +18,10 @@ eureka:
   instance:
     prefer-ip-address: true
     instance-id: ${spring.application.name}:${server.port}
+
+# Cấu hình timeout cho Feign client (gọi Speech/Pronunciation/AI Service)
+spring.cloud.openfeign.client.config:
+  default:
+    connect-timeout: 5000
+    read-timeout: 60000
+
