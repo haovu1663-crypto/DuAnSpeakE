@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpeakE – Luyện Phát Âm Tiếng Anh</title>
+  <meta name="description" content="Ghi âm giọng nói và phân tích phát âm thông minh với AI." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Animated background blobs -->
+  <div class="bg-blob blob-1"></div>
+  <div class="bg-blob blob-2"></div>
+  <div class="bg-blob blob-3"></div>
+
+  <div class="page-wrapper">
+
+    <!-- ── HEADER ── -->
+    <header class="header">
+      <div class="logo">
+        <span class="logo-icon">🎙️</span>
+        <span class="logo-text">Speak<span class="logo-accent">E</span></span>
+      </div>
+      <nav class="nav-pills">
+        <a href="#" class="nav-pill active">Ghi âm</a>
+        <a href="#" class="nav-pill">Lịch sử</a>
+      </nav>
+      <div class="header-badge">
+        <span class="badge-dot" id="mic-status-dot"></span>
+        <span id="mic-status-text">Sẵn sàng ghi âm</span>
+      </div>
+    </header>
+
+    <!-- ── MAIN ── -->
+    <main class="main-grid">
+
+      <!-- LEFT: Recording Panel -->
+      <section class="panel input-card" aria-label="Ghi âm giọng nói">
+
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <h1 class="panel-title">Ghi âm hội thoại</h1>
+            <p class="panel-subtitle">Nhấn nút mic để bắt đầu ghi âm trực tiếp</p>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="btn-reset" title="Đặt lại" disabled>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/>
+            </svg>
+            Đặt lại
+          </button>
+        </div>
+
+        <!-- ── Big record button ── -->
+        <div class="record-stage">
+
+          <!-- Waveform canvas -->
+          <canvas id="waveform-canvas" class="waveform-canvas" width="420" height="80"></canvas>
+
+          <!-- Pulsing rings + mic button -->
+          <div class="mic-wrapper" id="mic-wrapper">
+            <div class="mic-ring ring-3" id="ring-3"></div>
+            <div class="mic-ring ring-2" id="ring-2"></div>
+            <div class="mic-ring ring-1" id="ring-1"></div>
+            <button class="mic-btn" id="mic-btn" aria-label="Bắt đầu ghi âm">
+              <!-- Mic icon -->
+              <svg class="icon-mic" id="icon-mic" width="40" height="40" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="1.8">
+                <rect x="9" y="2" width="6" height="12" rx="3"/>
+                <path d="M5 10a7 7 0 0 0 14 0"/>
+                <line x1="12" y1="19" x2="12" y2="22"/>
+                <line x1="8"  y1="22" x2="16" y2="22"/>
+              </svg>
+              <!-- Stop icon (hidden by default) -->
+              <svg class="icon-stop" id="icon-stop" width="32" height="32" viewBox="0 0 24 24"
+                   fill="currentColor" hidden>
+                <rect x="4" y="4" width="16" height="16" rx="3"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Timer -->
+          <div class="record-timer" id="record-timer">00:00</div>
+
+          <!-- State label -->
+          <div class="record-label" id="record-label">Nhấn để bắt đầu</div>
+
+        </div>
+
+        <!-- ── Playback ── -->
+        <div class="playback-section" id="playback-section" hidden>
+          <div class="playback-header">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            Nghe lại bản ghi âm
+          </div>
+          <audio id="audio-playback" controls class="audio-player"></audio>
+          <div class="recording-meta" id="recording-meta"></div>
+        </div>
+
+        <!-- ── Options ── -->
+        <div class="options-row">
+          <label class="option-chip" title="Phân tích phát âm chi tiết">
+            <input type="checkbox" id="opt-pronunciation" checked />
+            <span class="chip-icon">🔊</span> Phát âm
+          </label>
+          <label class="option-chip" title="Kiểm tra ngữ pháp">
+            <input type="checkbox" id="opt-grammar" />
+            <span class="chip-icon">📝</span> Ngữ pháp
+          </label>
+          <label class="option-chip" title="Gợi ý từ vựng">
+            <input type="checkbox" id="opt-vocab" />
+            <span class="chip-icon">📚</span> Từ vựng
+          </label>
+          <label class="option-chip" title="Phân tích AI nâng cao">
+            <input type="checkbox" id="opt-ai" checked />
+            <span class="chip-icon">🤖</span> AI phân tích
+          </label>
+        </div>
+
+        <!-- ── Submit ── -->
+        <button class="btn btn-primary btn-submit" id="btn-submit" disabled>
+          <span class="btn-text">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+            Gửi phân tích
+          </span>
+          <span class="btn-loader" hidden>
+            <span class="spinner"></span> Đang xử lý…
+          </span>
+        </button>
+
+        <!-- Error -->
+        <div class="alert alert-error" id="error-msg" hidden>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span id="error-text">Có lỗi xảy ra.</span>
+        </div>
+
+        <!-- Permission denied -->
+        <div class="alert alert-warn" id="perm-msg" hidden>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <span>Trình duyệt chưa được cấp quyền microphone. Vui lòng cho phép và thử lại.</span>
+        </div>
+
+      </section>
+
+      <!-- RIGHT: Response Panel -->
+      <section class="panel response-card" aria-label="Kết quả phân tích">
+
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <h2 class="panel-title">Kết quả phân tích</h2>
+            <p class="panel-subtitle">Phản hồi AI sẽ hiển thị tại đây</p>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="btn-copy" disabled>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2"/>
+              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+            </svg>
+            Sao chép
+          </button>
+        </div>
+
+        <!-- Empty state -->
+        <div class="empty-state" id="empty-state">
+          <div class="empty-icon">🎙️</div>
+          <p class="empty-title">Chưa có kết quả</p>
+          <p class="empty-desc">Ghi âm giọng nói và nhấn <strong>Gửi phân tích</strong> để AI đánh giá</p>
+        </div>
+
+        <!-- Skeleton -->
+        <div class="skeleton-group" id="skeleton-group" hidden>
+          <div class="skeleton skeleton-line w-80"></div>
+          <div class="skeleton skeleton-line w-60"></div>
+          <div class="skeleton skeleton-line w-90"></div>
+          <div class="skeleton skeleton-block"></div>
+          <div class="skeleton skeleton-line w-70"></div>
+          <div class="skeleton skeleton-line w-50"></div>
+        </div>
+
+        <!-- Result -->
+        <div class="result-content" id="result-content" hidden>
+          <div class="score-row"    id="score-row"></div>
+          <div class="transcript-block" id="transcript-block"></div>
+          <div class="analysis-block"   id="analysis-block"></div>
+          <details class="raw-details">
+            <summary>Xem dữ liệu thô (JSON)</summary>
+            <pre class="raw-json" id="raw-json"></pre>
+          </details>
+        </div>
+
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>SpeakE © 2026 · Powered by Spring Cloud Microservices · Gateway <code>:8080</code> · Frontend <code>:3000</code></p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
