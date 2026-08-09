@@ -2,6 +2,7 @@ package re.resultservice.controller;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -21,5 +22,9 @@ public class ResultController {
         log.info("POST /result/process - Processing audio file: {}", file.getOriginalFilename());
         ProcessResultResponse response = resultService.processAudio(file);
         return ResponseEntity.ok(response);
+    }
+    @GetMapping()
+    public ResponseEntity<?> test(){
+        return new ResponseEntity<>("jgvd", HttpStatus.OK);
     }
 }

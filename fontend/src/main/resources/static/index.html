@@ -192,13 +192,62 @@
 
         <!-- Result -->
         <div class="result-content" id="result-content" hidden>
-          <div class="score-row"    id="score-row"></div>
-          <div class="transcript-block" id="transcript-block"></div>
-          <div class="analysis-block"   id="analysis-block"></div>
+
+          <!-- 1. Score Cards -->
+          <div class="score-row" id="score-row"></div>
+
+          <!-- 2. Transcript -->
+          <div class="result-section" id="section-transcript" hidden>
+            <div class="section-label">📝 Văn bản nhận dạng</div>
+            <div class="transcript-card" id="transcript-card">
+              <div class="transcript-label">🎤 Speech-to-Text</div>
+              <div class="transcript-text" id="transcript-text"></div>
+            </div>
+          </div>
+
+          <!-- 3. Grammar Correction -->
+          <div class="result-section" id="section-grammar" hidden>
+            <div class="section-label">📐 Ngữ pháp</div>
+            <div class="info-card" id="grammar-card">
+              <div class="info-card-header">
+                <div class="info-card-title">✏️ Bản sửa đổi</div>
+                <span class="info-card-badge" id="grammar-badge">—</span>
+              </div>
+              <div class="info-card-body" id="grammar-corrected"></div>
+              <div class="info-card-note" id="grammar-explanation"></div>
+            </div>
+          </div>
+
+          <!-- 4. Pronunciation Mistakes -->
+          <div class="result-section" id="section-mistakes" hidden>
+            <div class="section-label">🔊 Lỗi phát âm</div>
+            <div id="mistakes-container"></div>
+          </div>
+
+          <!-- 5. Vocabulary Level -->
+          <div class="result-section" id="section-vocab" hidden>
+            <div class="section-label">📚 Từ vựng</div>
+            <div class="info-card">
+              <div class="info-card-title">🎓 Trình độ từ vựng ước tính</div>
+              <div class="vocab-level-display" id="vocab-display"></div>
+            </div>
+          </div>
+
+          <!-- 6. General Feedback -->
+          <div class="result-section" id="section-feedback" hidden>
+            <div class="section-label">🤖 AI Nhận xét</div>
+            <div class="info-card" id="feedback-card">
+              <div class="info-card-title">💬 Phản hồi tổng quan</div>
+              <div class="info-card-body" id="feedback-text"></div>
+            </div>
+          </div>
+
+          <!-- 7. Raw JSON -->
           <details class="raw-details">
-            <summary>Xem dữ liệu thô (JSON)</summary>
+            <summary>🔍 Xem dữ liệu thô (JSON)</summary>
             <pre class="raw-json" id="raw-json"></pre>
           </details>
+
         </div>
 
       </section>

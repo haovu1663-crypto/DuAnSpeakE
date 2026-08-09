@@ -4,9 +4,9 @@
 ───────────────────────────────────────────── */
 
 // ── Config ──────────────────────────────────
-const API_BASE = 'http://localhost:8080';
+const API_BASE = 'http://localhost:8080/result-service';
 const ENDPOINTS = {
-  process: '/api/result/process'
+  process: '/result/process'
 };
 const MAX_RECORDING_SEC = 300; // 5 minutes max
 
@@ -317,28 +317,31 @@ btnSubmit.addEventListener('click', async () => {
   setLoading(true);
   showSkeleton();
 
-  const options = {
-    analyzePronunciation: document.getElementById('opt-pronunciation').checked,
-    analyzeGrammar:       document.getElementById('opt-grammar').checked,
-    analyzeVocab:         document.getElementById('opt-vocab').checked,
-    useAI:                document.getElementById('opt-ai').checked,
-  };
-
-  const endpoint = ENDPOINTS.process;
-
   try {
     const formData = new FormData();
-    const ext  = audioBlob.type.includes('ogg') ? 'ogg' : audioBlob.type.includes('mp4') ? 'mp4' : 'webm';
+    // Xác định extension phù hợp với MIME type ghi âm được
+    const mime = audioBlob.type || 'audio/webm';
+    const ext  = mime.includes('ogg') ? 'ogg'
+               : mime.includes('mp4') ? 'mp4'
+               : mime.includes('wav') ? 'wav'
+               : 'webm';
     formData.append('file', audioBlob, `recording.${ext}`);
 
-    const response = await fetch(`${API_BASE}${endpoint}`, {
+    const response = await fetch(`${API_BASE}${ENDPOINTS.process}`, {
       method: 'POST',
       body: formData,
+      // Không set Content-Type thủ công — browser tự set boundary cho multipart
     });
 
     if (!response.ok) {
-      const errBody = await response.text();
-      throw new Error(`Server trả về lỗi ${response.status}: ${errBody || response.statusText}`);
+      let errMsg = `Server lỗi ${response.status}`;
+      try {
+        const errBody = await response.json();
+        errMsg = errBody.message || errBody.error || JSON.stringify(errBody);
+      } catch (_) {
+        errMsg = `${response.status}: ${response.statusText}`;
+      }
+      throw new Error(errMsg);
     }
 
     const data = await response.json();
@@ -346,12 +349,12 @@ btnSubmit.addEventListener('click', async () => {
 
   } catch (err) {
     hideSkeleton();
-    if (err.name === 'TypeError' && err.message.toLowerCase().includes('fetch')) {
-      showError('Không kết nối được Gateway (:8080). Hiển thị kết quả demo.');
+    hideResult();
+    if (err.name === 'TypeError' && (err.message.includes('fetch') || err.message.includes('Failed'))) {
+      showError('❌ Không kết nối được Gateway (:8080). Kiểm tra các service đã chạy chưa? Hiển thị kết quả demo.');
       renderResult(buildDemoResult());
     } else {
-      showError(err.message);
-      hideResult();
+      showError('❌ ' + err.message);
     }
   } finally {
     setLoading(false);
@@ -368,119 +371,180 @@ btnCopy.addEventListener('click', () => {
 });
 
 // ── Render result ─────────────────────────────
+// ProcessResultResponse fields từ backend:
+// audioId, transcript, pronunciationScore, fluencyScore, clarityScore, accuracyScore,
+// pronunciationMistakes[], grammarCorrection, grammarExplanation, vocabularyLevel, generalFeedback
 function renderResult(data) {
   hideSkeleton();
 
-  // Mapping ProcessResultResponse to UI
+  // 1. Scores
+  const scoreRow = document.getElementById('score-row');
   scoreRow.innerHTML = '';
-  const overall = Math.round((data.pronunciationScore + data.fluencyScore + data.clarityScore) / 3) || 0;
   
-  // Tính điểm ngữ pháp giả lập (nếu có sửa lỗi thì trừ điểm)
-  let grammarScore = 95;
-  if (data.grammarCorrection && data.grammarCorrection !== data.transcript) {
-     grammarScore -= 15;
-  }
-  
-  // Đổi từ level sang score
-  let vocabScore = 80;
-  if (data.vocabularyLevel === 'Advanced') vocabScore = 95;
-  else if (data.vocabularyLevel === 'Beginner') vocabScore = 65;
+  const pron    = data.pronunciationScore ?? data.scores?.pronunciation ?? 0;
+  const fluency = data.fluencyScore       ?? data.scores?.fluency       ?? 0;
+  const clarity = data.clarityScore       ?? data.scores?.clarity       ?? 0;
+  const accuracy= data.accuracyScore      ?? data.scores?.accuracy      ?? 0;
+  const overall = Math.round((pron + fluency + clarity) / 3);
 
   [
-    { label: 'Phát âm',  value: data.pronunciationScore || 0 },
-    { label: 'Trôi chảy', value: data.fluencyScore || 0 },
-    { label: 'Rõ ràng',  value: data.clarityScore || 0 },
-    { label: 'Tổng thể', value: overall },
+    { label: 'Phát âm',   value: pron },
+    { label: 'Trôi chảy', value: fluency },
+    { label: 'Rõ ràng',   value: clarity },
+    { label: 'Chính xác', value: accuracy },
+    { label: 'Tổng thể',  value: overall },
   ].forEach((item, i) => {
     const card = document.createElement('div');
     card.className = 'score-card';
-    card.style.animationDelay = `${i * 0.06}s`;
-    const val = typeof item.value === 'number' ? Math.round(item.value) + '%' : '—';
-    card.innerHTML = `<div class="score-value">${val}</div><div class="score-label">${item.label}</div>`;
+    card.style.animationDelay = `${i * 0.05}s`;
+    
+    const pct = typeof item.value === 'number' && item.value > 0 ? Math.round(item.value) : 0;
+    const color = pct >= 80 ? 'var(--clr-success)' : pct >= 60 ? 'var(--clr-warning)' : pct > 0 ? 'var(--clr-error)' : 'var(--clr-text-3)';
+    
+    card.innerHTML = `
+      <div class="score-value" style="color:${color}">${pct > 0 ? pct + '%' : '—'}</div>
+      <div class="score-label">${item.label}</div>
+      <div class="score-bar">
+        <div class="score-bar-fill" style="width: ${pct}%; background: ${color}"></div>
+      </div>
+    `;
     scoreRow.appendChild(card);
   });
 
-  // Transcript
-  transcriptBlock.innerHTML = '';
-  if (data.transcript) {
-    transcriptBlock.innerHTML = `
-      <div class="transcript-title">📝 Văn bản nhận dạng (Speech-to-Text)</div>
-      <div class="transcript-text">${data.transcript}</div>
-    `;
+  // 2. Transcript
+  const transcript = data.transcript || '';
+  const secTranscript = document.getElementById('section-transcript');
+  if (transcript) {
+    document.getElementById('transcript-text').innerHTML = escHtml(transcript);
+    secTranscript.hidden = false;
+  } else {
+    secTranscript.hidden = true;
   }
 
-  // Analysis items
-  analysisBlock.innerHTML = '';
-  const tips = [];
+  // 3. Grammar
+  const corrected = data.grammarCorrection || '';
+  const secGrammar = document.getElementById('section-grammar');
+  if (corrected && corrected !== transcript) {
+    document.getElementById('grammar-corrected').innerHTML = `<strong>Đề xuất:</strong> ${escHtml(corrected)}`;
+    document.getElementById('grammar-explanation').innerHTML = escHtml(data.grammarExplanation || 'Câu của bạn có lỗi ngữ pháp.');
+    
+    const badge = document.getElementById('grammar-badge');
+    badge.className = 'info-card-badge badge-warn';
+    badge.textContent = 'Cần cải thiện';
+    secGrammar.hidden = false;
+  } else if (transcript) {
+    document.getElementById('grammar-corrected').innerHTML = `<div class="no-mistakes">✨ Tuyệt vời! Câu của bạn đúng ngữ pháp.</div>`;
+    document.getElementById('grammar-explanation').innerHTML = 'Tiếp tục phát huy nhé.';
+    const badge = document.getElementById('grammar-badge');
+    badge.className = 'info-card-badge badge-success';
+    badge.textContent = 'Hoàn hảo';
+    secGrammar.hidden = false;
+  } else {
+    secGrammar.hidden = true;
+  }
+
+  // 4. Mistakes
+  const mistakes = data.pronunciationMistakes || data.analysis || [];
+  const secMistakes = document.getElementById('section-mistakes');
+  const mistakesContainer = document.getElementById('mistakes-container');
+  mistakesContainer.innerHTML = '';
   
-  if (data.pronunciationMistakes && data.pronunciationMistakes.length > 0) {
-    data.pronunciationMistakes.forEach(m => {
-       tips.push({
-         label: 'Lỗi phát âm',
-         text: `Từ: "${m.word}"`,
-         feedback: `Lỗi nhận diện: ${m.problem}`,
-         tags: [{type:'warn', label:'⚡ Cần luyện'}]
-       });
+  if (mistakes.length > 0) {
+    const list = document.createElement('div');
+    list.className = 'mistake-list';
+    
+    mistakes.forEach(m => {
+      // Backend format
+      if (m.word !== undefined) {
+        list.innerHTML += `
+          <div class="mistake-item">
+            <div class="mistake-word">Từ: <span>${escHtml(m.word)}</span></div>
+            <div class="mistake-problem">Vấn đề: ${escHtml(m.problem || '')}</div>
+          </div>
+        `;
+      } 
+      // Demo format support
+      else if (m.label) {
+        list.innerHTML += `
+          <div class="mistake-item">
+            <div class="mistake-word">${escHtml(m.label)}</div>
+            <div class="mistake-problem">${escHtml(m.feedback || '')}</div>
+          </div>
+        `;
+      }
     });
+    mistakesContainer.appendChild(list);
+    secMistakes.hidden = false;
+  } else if (transcript) {
+    mistakesContainer.innerHTML = `<div class="no-mistakes">✨ Không phát hiện lỗi phát âm đáng kể.</div>`;
+    secMistakes.hidden = false;
+  } else {
+    secMistakes.hidden = true;
   }
 
-  if (data.grammarCorrection && data.grammarCorrection !== data.transcript) {
-    tips.push({
-      label: 'Sửa lỗi Ngữ pháp',
-      text: data.grammarCorrection,
-      feedback: data.grammarExplanation || 'Câu của bạn có lỗi ngữ pháp.',
-      tags: [{type:'error', label:'✕ Sai ngữ pháp'}]
-    });
-  }
-
-  if (data.generalFeedback) {
-    tips.push({
-      label: 'Nhận xét tổng quan',
-      text: `Trình độ từ vựng ước tính: ${data.vocabularyLevel || 'N/A'}`,
-      feedback: data.generalFeedback,
-      tags: [{type:'good', label:'✓ Đánh giá'}]
-    });
-  }
-
-  tips.forEach((item, i) => {
-    const el = document.createElement('div');
-    el.className = 'analysis-item';
-    el.style.animationDelay = `${i * 0.07}s`;
-    const tags = (item.tags || []).map(t => `<span class="tag tag-${t.type}">${t.label}</span>`).join('');
-    el.innerHTML = `
-      <div class="analysis-label">${item.label || 'Nhận xét'}</div>
-      <div class="analysis-original">${item.text || ''}</div>
-      <div class="analysis-feedback">${item.feedback || ''}</div>
-      ${tags ? `<div class="tag-row">${tags}</div>` : ''}
+  // 5. Vocabulary
+  const vocabLevel = data.vocabularyLevel || 'N/A';
+  const secVocab = document.getElementById('section-vocab');
+  if (vocabLevel !== 'N/A') {
+    let icon = '📚'; let hint = 'Trình độ cơ bản';
+    if (vocabLevel.toLowerCase().includes('intermediate')) { icon = '🚀'; hint = 'Trình độ trung cấp'; }
+    if (vocabLevel.toLowerCase().includes('advanced')) { icon = '💎'; hint = 'Trình độ cao cấp'; }
+    
+    document.getElementById('vocab-display').innerHTML = `
+      <div class="vocab-icon">${icon}</div>
+      <div class="vocab-text-group">
+        <div class="vocab-level-name">${escHtml(vocabLevel)}</div>
+        <div class="vocab-level-hint">${hint}</div>
+      </div>
     `;
-    analysisBlock.appendChild(el);
-  });
+    secVocab.hidden = false;
+  } else {
+    secVocab.hidden = true;
+  }
 
-  // Raw JSON
-  rawJson.textContent = JSON.stringify(data, null, 2);
+  // 6. Feedback
+  const feedback = data.generalFeedback || '';
+  const secFeedback = document.getElementById('section-feedback');
+  if (feedback) {
+    document.getElementById('feedback-text').innerHTML = escHtml(feedback).replace(/\n/g, '<br/>');
+    secFeedback.hidden = false;
+  } else {
+    secFeedback.hidden = true;
+  }
+
+  // 7. Raw JSON
+  document.getElementById('raw-json').textContent = JSON.stringify(data, null, 2);
 
   showResult();
 }
 
-// ── Demo result ───────────────────────────────
-function buildDemoResult() {
-  const tips = [
-    { label: 'Nhịp điệu & Tốc độ', text: 'Tốc độ nói vừa phải, dễ nghe.', feedback: 'Tốc độ của bạn khá tốt. Thử duy trì nhịp điệu đều đặn trong suốt đoạn hội thoại.', tags: [{type:'good', label:'✓ Tốt'}] },
-    { label: 'Nguyên âm', text: '/æ/ → "cat", "bad", "man"', feedback: 'Âm /æ/ cần mở miệng rộng hơn. Hạ hàm dưới và kéo môi sang hai bên.', tags: [{type:'warn', label:'⚡ Cần luyện'}] },
-    { label: 'Phụ âm khó', text: '/θ/ → "think", "three", "through"', feedback: 'Âm /θ/ cần đặt đầu lưỡi nhẹ giữa hai hàm răng và thổi hơi. Không dùng âm /s/ hay /d/ thay thế.', tags: [{type:'warn', label:'⚡ Cần luyện'}, {type:'error', label:'✕ Lỗi phổ biến'}] },
-    { label: 'Intonation (ngữ điệu)', text: 'Câu hỏi Yes/No: giọng lên cuối câu', feedback: 'Ngữ điệu câu hỏi của bạn khá ổn. Hãy đảm bảo giọng đi lên rõ ràng ở cuối câu hỏi.', tags: [{type:'good', label:'✓ Intonation'}] },
-    { label: 'Trọng âm từ', text: '"pho-TO-graph" vs "pho-TOG-ra-phy"', feedback: 'Chú ý vị trí trọng âm thay đổi theo dạng từ (danh từ ↔ động từ, v.d. "RE-cord" vs "re-CORD").', tags: [{type:'warn', label:'⚡ Trọng âm'}] },
-  ];
+// Escape HTML để tránh XSS
+function escHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 
+// ── Demo result ───────────────────────────────
+// Giả lập cấu trúc ProcessResultResponse từ backend
+function buildDemoResult() {
   return {
-    transcript: '(Demo) Hello, how are you today? I am fine, thank you very much.',
-    scores: {
-      pronunciation: Math.floor(72 + Math.random() * 22),
-      grammar:       Math.floor(68 + Math.random() * 26),
-      vocabulary:    Math.floor(75 + Math.random() * 20),
-      overall:       Math.floor(70 + Math.random() * 24),
-    },
-    analysis: tips,
+    audioId: 'demo-' + Date.now(),
+    transcript: 'Hello, how are you today? I am fine, thank you very much.',
+    pronunciationScore: Math.floor(72 + Math.random() * 22),
+    fluencyScore:       Math.floor(68 + Math.random() * 26),
+    clarityScore:       Math.floor(75 + Math.random() * 20),
+    accuracyScore:      Math.floor(70 + Math.random() * 24),
+    pronunciationMistakes: [
+      { word: 'pronunciation', problem: 'Cần chú ý âm "un" - /prəˌnʌn.siˈeɪ.ʃən/' },
+    ],
+    grammarCorrection:  'Hello, how are you today? I am fine, thank you very much.',
+    grammarExplanation: 'Câu của bạn đã đúng ngữ pháp.',
+    vocabularyLevel:    'Intermediate',
+    generalFeedback:    '(Demo) Phát âm của bạn khá tốt! Tốc độ nói vừa phải. Hãy chú ý thêm đến việc kéo dài nguyên âm đúng chỗ.',
   };
 }
 

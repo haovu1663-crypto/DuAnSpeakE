@@ -7,14 +7,15 @@ server:
 
 eureka:
   instance:
-    hostname: localhost
+    hostname: ${EUREKA_HOST:localhost}
   client:
-    # Eureka server không tự đăng ký vào chính nó
     register-with-eureka: false
     fetch-registry: false
     service-url:
-      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/
-  server:
-    # Tắt bảo vệ self-preservation trong môi trường dev
-    enable-self-preservation: false
-    eviction-interval-timer-in-ms: 5000
+      defaultZone: http://${EUREKA_HOST:localhost}:8761/eureka/
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
